@@ -1,52 +1,66 @@
 package slowerdaddy
 
 import (
+	"errors"
 	"net"
 
 	"golang.org/x/time/rate"
 )
 
+var (
+	// ErrLimitGreaterThanTotal is returned when the limit is greater than the total limit of the listener.
+	ErrLimitGreaterThanTotal = errors.New("limit per conn cannot be greater than total limit")
+)
+
+// Listener is a net.Listener that allows to control the bandwidth of the net.Conn connections and the limiter itself.
 type Listener struct {
-	l       net.Listener
-	allowed int
+	net.Listener
+	// limitConn is the limit of the bandwidth of a single net.Conn.
+	limitConn int
+	// limitTotal is the limit of the bandwidth of all net.Conn connections currently active.
+	limitTotal int
 }
 
-// NewListener returns a Listener that
-func Listen(network, addr string, limit int) (*Listener, error) {
+// NewListener returns a Listener that will be bound to addr with the specified limits.
+func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) {
 	ln, err := net.Listen(network, addr)
 	if err != nil {
 		return nil, err
 	}
-	return WithLimit(ln, limit), nil
+	return WithLimit(ln, limitConn, limitTotal), nil
 }
 
-func WithLimit(l net.Listener, allowed int) *Listener {
+func WithLimit(l net.Listener, limitConn, limitTotal int) *Listener {
 	return &Listener{
-		l:       l,
-		allowed: allowed,
+		Listener:   l,
+		limitConn:  limitConn,
+		limitTotal: limitTotal,
 	}
 }
 
 // Accept waits for and returns the next connection to the listener.
 func (l Listener) Accept() (net.Conn, error) {
-	conn, err := l.l.Accept()
+	conn, err := l.Listener.Accept()
 	if err != nil {
 		return nil, err
 	}
 	return &Conn{
 		Conn:    conn,
-		allowed: l.allowed,
-		limiter: rate.NewLimiter(rate.Limit(l.allowed), l.allowed),
+		limit:   l.limitConn,
+		limiter: rate.NewLimiter(rate.Limit(l.limitConn), l.limitConn),
 	}, nil
 }
 
-// Close closes the listener.
-// Any blocked Accept operations will be unblocked and return errors.
-func (l Listener) Close() error {
-	return l.l.Close()
+func (l *Listener) SetConnLimit(limit int) error {
+	if limit > l.limitTotal {
+		return ErrLimitGreaterThanTotal
+	}
+
+	l.limitConn = limit
+	return nil
 }
 
-// Addr returns the listener's network address.
-func (l Listener) Addr() net.Addr {
-	return l.l.Addr()
+func (l *Listener) SetTotalLimit(limit int) error {
+	l.limitTotal = limit
+	return nil
 }
