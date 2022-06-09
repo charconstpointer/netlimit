@@ -2,7 +2,6 @@ package slowerdaddy
 
 import (
 	"context"
-	"log"
 	"net"
 )
 
@@ -36,7 +35,6 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	}
-	log.Println(c.RemoteAddr().String(), "read", n, err)
 	return n, err
 }
 
@@ -63,8 +61,6 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 			return written, err
 		}
 		written += n
-		log.Println(c.RemoteAddr().String(), "write", n, err)
-
 	}
 
 	return written, err

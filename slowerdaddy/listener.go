@@ -17,11 +17,12 @@ type Listener struct {
 	net.Listener
 	// limitConn is the limit of the bandwidth of a single net.Conn.
 	limitConn int
-	// limitTotal is the limit of the bandwidth of all net.Conn connections currently active.
+	// limitTotal is the limit of the bandwidth of all net.Conn connections currently active combined.
 	limitTotal int
 }
 
-// NewListener returns a Listener that will be bound to addr with the specified limits.
+// Listen returns a Listener that will be bound to addr with the specified limits.
+// Listen uses WithLimit to create the Listener.
 func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) {
 	ln, err := net.Listen(network, addr)
 	if err != nil {
@@ -30,6 +31,7 @@ func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) 
 	return WithLimit(ln, limitConn, limitTotal), nil
 }
 
+// WithLimit returns a Listener that will be bound to addr with the specified limits.
 func WithLimit(l net.Listener, limitConn, limitTotal int) *Listener {
 	return &Listener{
 		Listener:   l,
@@ -51,6 +53,7 @@ func (l Listener) Accept() (net.Conn, error) {
 	}, nil
 }
 
+// SetConnLimit sets the limit of the bandwidth of a single net.Conn.
 func (l *Listener) SetConnLimit(limit int) error {
 	if limit > l.limitTotal {
 		return ErrLimitGreaterThanTotal
@@ -60,6 +63,7 @@ func (l *Listener) SetConnLimit(limit int) error {
 	return nil
 }
 
+// SetTotalLimit sets the limit of the bandwidth of all net.Conn connections currently active combined.
 func (l *Listener) SetTotalLimit(limit int) error {
 	l.limitTotal = limit
 	return nil
