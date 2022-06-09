@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
-	"strings"
+	"os"
 	"time"
 )
 
@@ -15,19 +14,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	limit := 123 //kbps
+	limit := 1024
 	tln := NewThrottledListener(ln, limit)
 	s := http.Server{
 		ReadTimeout:  100 * time.Second,
 		WriteTimeout: 100 * time.Second,
 	}
 	s.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		b := make([]byte, 9999999)
-		sb := strings.Builder{}
-		for i := 0; i < len(b); i++ {
-			sb.WriteString("x")
+		f, err := os.Open("lorem")
+		if err != nil {
+			log.Fatal(err)
 		}
-		fmt.Fprint(w, sb.String())
+		_, _ = io.Copy(w, f)
 	})
 	http.Serve(tln, s.Handler)
 }

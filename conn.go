@@ -20,20 +20,20 @@ type Conn struct {
 // Read can be made to time out and return an error after a fixed
 // time limit; see SetDeadline and SetReadDeadline.
 func (c *Conn) Read(b []byte) (n int, err error) {
-	if err := c.limiter.WaitN(context.Background(), c.allowed); err != nil {
+	quota := c.allowed
+	if len(b) < c.allowed {
+		quota = len(b)
+	}
+
+	if err := c.limiter.WaitN(context.Background(), quota); err != nil {
 		return 0, err
 	}
 
-	readN := c.allowed
-	if len(b) < c.allowed {
-		readN = len(b)
-	}
-
-	n, err = c.Conn.Read(b[:readN])
+	n, err = c.Conn.Read(b[:quota])
 	if err != nil {
 		return n, err
 	}
-	log.Println("read", n, err)
+	log.Println(c.RemoteAddr().String(), "read", n, err)
 	return n, err
 }
 
@@ -41,11 +41,27 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // Write can be made to time out and return an error after a fixed
 // time limit; see SetDeadline and SetWriteDeadline.
 func (c *Conn) Write(b []byte) (n int, err error) {
-	if err := c.limiter.WaitN(context.Background(), c.allowed); err != nil {
-		return 0, err
+	quota := c.allowed
+	written := 0
+	for written < len(b) {
+		if len(b[written:]) < c.allowed {
+			quota = len(b[written:])
+		}
+		if err := c.limiter.WaitN(context.Background(), quota); err != nil {
+			return 0, err
+		}
+		tail := written + quota
+		if tail > len(b) {
+			tail = len(b)
+		}
+		n, err = c.Conn.Write(b[written:tail])
+		if err != nil {
+			return written, err
+		}
+		written += n
+		log.Println(c.RemoteAddr().String(), "write", n, err)
+
 	}
 
-	n, err = c.Conn.Write(b[:c.allowed])
-	log.Println("write", n, err)
-	return n, err
+	return written, err
 }
