@@ -1,4 +1,4 @@
-package main
+package slowerdaddy
 
 import (
 	"net"
@@ -11,8 +11,17 @@ type Listener struct {
 	allowed int
 }
 
-func NewThrottledListener(l net.Listener, allowed int) net.Listener {
-	return Listener{
+// NewListener returns a Listener that
+func Listen(network, addr string, limit int) (*Listener, error) {
+	ln, err := net.Listen(network, addr)
+	if err != nil {
+		return nil, err
+	}
+	return WithLimit(ln, limit), nil
+}
+
+func WithLimit(l net.Listener, allowed int) *Listener {
+	return &Listener{
 		l:       l,
 		allowed: allowed,
 	}
