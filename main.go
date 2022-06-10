@@ -5,13 +5,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/charconstpointer/slowerdaddy/slowerdaddy"
 )
 
 var (
 	limitConn  = 100
-	limitTotal = 9999
+	limitTotal = 1000
 	addr       = ":8080"
 	proto      = "tcp"
 	fileName   = "lorem"
@@ -30,5 +31,18 @@ func main() {
 		_, _ = io.Copy(w, f)
 	})
 
-	http.Serve(ln, handler)
+	go http.Serve(ln, handler)
+	// var limits []int
+	for {
+		// newLimit := rand.Intn(100) + 1
+		// limits = append(limits, newLimit)
+		// log.Println("updating limit to", newLimit)
+		// ln.SetConnLimit(newLimit)
+		// avg := 0
+		// for _, l := range limits {
+		// 	avg += l
+		// }
+		// log.Println("avg limit", avg/len(limits))
+		time.Sleep(time.Second)
+	}
 }

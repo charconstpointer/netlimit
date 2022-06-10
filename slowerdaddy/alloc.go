@@ -10,9 +10,9 @@ import (
 type Allocator struct {
 	global       Limiter
 	scoped       Limiter
-	limit        int
 	quotaReqs    chan *QuotaRequest
 	updateLimits chan int
+	limit        int
 }
 
 type QuotaRequest struct {
@@ -38,11 +38,10 @@ func (a *Allocator) Resolve(ctx context.Context) error {
 			return nil
 		case newLimit := <-a.updateLimits:
 			log.Println("updating limit to", newLimit)
-			// a.scoped.SetLimit(rate.Limit(newLimit))
+			a.scoped.SetLimit(rate.Limit(newLimit))
 			a.scoped.SetBurst(newLimit)
 			a.limit = newLimit
 		default:
-			log.Println("resolving quotaxxxxxxs")
 			if err := a.resolveQuotas(ctx); err != nil {
 				log.Println("resolve failed:", err)
 				continue
@@ -68,7 +67,7 @@ func (a *Allocator) resolveQuotas(ctx context.Context) error {
 			return err
 		}
 		req.allowCh <- req.Value
-		log.Println("quota granted for", req.ConnID)
+		log.Printf("grated %d quota for %s", req.Value, req.ConnID)
 	}
 	return nil
 }
