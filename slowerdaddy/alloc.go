@@ -35,11 +35,12 @@ func (a *Allocator) TryAlloc(amount int) (int, bool) {
 	if amount > a.limit {
 		quota = a.limit
 	}
-	log.Println("allocating", quota, "bytes")
+	log.Println("checking possible alloc of", quota, "bytes in global limiter")
 	if ok := a.global.AllowN(time.Now(), quota); !ok {
 		log.Println("global quota exceeded")
 		return 0, false
 	}
+	log.Println("trying to alloc", quota, "bytes in local limiter")
 	if err := a.global.WaitN(context.Background(), quota); err != nil {
 		log.Println("global wait failed:", err)
 		return 0, false

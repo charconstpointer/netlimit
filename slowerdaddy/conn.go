@@ -31,6 +31,7 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 	if quotaToRequest > c.alloc.limit {
 		quotaToRequest = c.alloc.limit
 	}
+
 	quota, ok := c.alloc.TryAlloc(quotaToRequest)
 	for !ok {
 		quota, ok = c.alloc.TryAlloc(quotaToRequest)
@@ -45,7 +46,6 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // Write will obey quota rules set by Listener
 func (c *Conn) Write(b []byte) (n int, err error) {
 	quotaToRequest := len(b)
-	var ok bool
 	if quotaToRequest > c.alloc.limit {
 		quotaToRequest = c.alloc.limit
 	}
