@@ -1,7 +1,6 @@
 package slowerdaddy
 
 import (
-	"context"
 	"errors"
 	"log"
 	"net"
@@ -51,10 +50,8 @@ func (l *Listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	alloc := NewAllocator(l.limiter, l.limitConn)
-	go alloc.Resolve(context.Background())
 	newConn := &Conn{
-		Conn: conn,
-		// limit: l.limitConn,
+		Conn:  conn,
 		alloc: alloc,
 	}
 	l.conns = append(l.conns, newConn)
@@ -69,10 +66,7 @@ func (l *Listener) SetConnLimit(limit int) error {
 	}
 
 	for _, conn := range l.conns {
-		select {
-		case conn.alloc.updateLimits <- limit:
-		default:
-		}
+		conn.alloc.SetLimit(limit)
 	}
 
 	l.limitConn = limit

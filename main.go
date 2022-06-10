@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/charconstpointer/slowerdaddy/slowerdaddy"
 )
@@ -31,18 +30,8 @@ func main() {
 		_, _ = io.Copy(w, f)
 	})
 
-	go http.Serve(ln, handler)
-	// var limits []int
-	for {
-		// newLimit := rand.Intn(100) + 1
-		// limits = append(limits, newLimit)
-		// log.Println("updating limit to", newLimit)
-		// ln.SetConnLimit(newLimit)
-		// avg := 0
-		// for _, l := range limits {
-		// 	avg += l
-		// }
-		// log.Println("avg limit", avg/len(limits))
-		time.Sleep(time.Second)
+	err = http.Serve(ln, handler)
+	if err != nil {
+		return
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -26,22 +27,16 @@ type Conn struct {
 // time limit; see SetDeadline and SetReadDeadline.
 // Read will obey quota rules set by Listener
 func (c *Conn) Read(b []byte) (n int, err error) {
-	allow := make(chan int)
-	requestQuota := len(b)
-	c.alloc.quotaReqs <- &QuotaRequest{
-		allowCh: allow,
-		Value:   requestQuota,
-		ConnID:  c.Conn.RemoteAddr().String(),
+	quotaToRequest := len(b)
+	if quotaToRequest > c.alloc.limit {
+		quotaToRequest = c.alloc.limit
 	}
-	allowedQuota := <-allow
-	quota := allowedQuota
+	quota, ok := c.alloc.TryAlloc(quotaToRequest)
+	for !ok {
+		quota, ok = c.alloc.TryAlloc(quotaToRequest)
+	}
 
-	log.Println("reading", quota, "bytes")
-	n, err = c.Conn.Read(b[:quota])
-	if err != nil {
-		return n, err
-	}
-	return n, nil
+	return c.Conn.Read(b[:quota])
 }
 
 // Write writes data to the connection.
@@ -49,35 +44,40 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // time limit; see SetDeadline and SetWriteDeadline.
 // Write will obey quota rules set by Listener
 func (c *Conn) Write(b []byte) (n int, err error) {
-	requestQuota := len(b)
-	allowedQuota := c.requestQuota(requestQuota)
-	quota := allowedQuota
+	quotaToRequest := len(b)
+	var ok bool
+	if quotaToRequest > c.alloc.limit {
+		quotaToRequest = c.alloc.limit
+	}
+
+	grantedQuota, ok := c.alloc.TryAlloc(quotaToRequest)
+	for !ok {
+		grantedQuota, ok = c.alloc.TryAlloc(quotaToRequest)
+		time.Sleep(time.Second)
+	}
+
 	written := 0
-	for written < len(b) {
-		tail := written + quota
-		if tail > len(b) {
-			tail = len(b)
+	total := len(b)
+	for written < total {
+		tail := written + grantedQuota
+		if tail > total {
+			tail = total
 		}
+
 		n, err = c.Conn.Write(b[written:tail])
 		if err != nil {
 			return written, err
 		}
-		log.Println("writing", n, "bytes")
+		log.Println("wrote", n, "bytes")
+
 		written += n
-		quota = len(b[written:])
-		allowedQuota := c.requestQuota(quota)
-		quota = allowedQuota
+		quotaToRequest = len(b[written:])
+		grantedQuota, ok = c.alloc.TryAlloc(quotaToRequest)
+		for !ok {
+			grantedQuota, ok = c.alloc.TryAlloc(quotaToRequest)
+			time.Sleep(time.Second)
+		}
 	}
 
 	return written, err
-}
-
-func (c *Conn) requestQuota(q int) int {
-	allow := make(chan int)
-	c.alloc.quotaReqs <- &QuotaRequest{
-		allowCh: allow,
-		Value:   q,
-		ConnID:  c.Conn.RemoteAddr().String(),
-	}
-	return <-allow
 }

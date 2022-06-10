@@ -3,16 +3,17 @@ package slowerdaddy
 import (
 	"context"
 	"log"
+	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
 
 type Allocator struct {
-	global       Limiter
-	scoped       Limiter
-	quotaReqs    chan *QuotaRequest
-	updateLimits chan int
-	limit        int
+	global *rate.Limiter
+	local  *rate.Limiter
+	limit  int
+	mu     sync.Mutex
 }
 
 type QuotaRequest struct {
@@ -21,53 +22,47 @@ type QuotaRequest struct {
 	Value   int
 }
 
-func NewAllocator(global Limiter, limit int) *Allocator {
+func NewAllocator(global *rate.Limiter, limit int) *Allocator {
 	return &Allocator{
-		quotaReqs:    make(chan *QuotaRequest),
-		scoped:       rate.NewLimiter(rate.Limit(limit), limit),
-		global:       global,
-		limit:        limit,
-		updateLimits: make(chan int, 1),
+		local:  rate.NewLimiter(rate.Limit(limit), limit),
+		global: global,
+		limit:  limit,
 	}
 }
 
-func (a *Allocator) Resolve(ctx context.Context) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case newLimit := <-a.updateLimits:
-			log.Println("updating limit to", newLimit)
-			a.scoped.SetLimit(rate.Limit(newLimit))
-			a.scoped.SetBurst(newLimit)
-			a.limit = newLimit
-		default:
-			if err := a.resolveQuotas(ctx); err != nil {
-				log.Println("resolve failed:", err)
-				continue
-			}
-		}
+func (a *Allocator) TryAlloc(amount int) (int, bool) {
+	quota := amount
+	if amount > a.limit {
+		quota = a.limit
 	}
+	log.Println("allocating", quota, "bytes")
+	if ok := a.global.AllowN(time.Now(), quota); !ok {
+		log.Println("global quota exceeded")
+		return 0, false
+	}
+	if err := a.global.WaitN(context.Background(), quota); err != nil {
+		log.Println("global wait failed:", err)
+		return 0, false
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if ok := a.local.AllowN(time.Now(), quota); !ok {
+		log.Println("local quota exceeded")
+		return 0, false
+	}
+	if err := a.local.WaitN(context.Background(), quota); err != nil {
+		log.Println("local wait failed:", err)
+		return 0, false
+	}
+
+	log.Printf("grated %d quota for", quota)
+	return quota, true
 }
 
-func (a *Allocator) resolveQuotas(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return nil
-	case req := <-a.quotaReqs:
-		if req.Value > a.limit {
-			req.Value = a.limit
-		}
-		if err := a.global.WaitN(ctx, req.Value); err != nil {
-			log.Println("global wait failed:", err)
-			return err
-		}
-		if err := a.scoped.WaitN(ctx, req.Value); err != nil {
-			log.Println("scoped wait failed:", err)
-			return err
-		}
-		req.allowCh <- req.Value
-		log.Printf("grated %d quota for %s", req.Value, req.ConnID)
-	}
-	return nil
+func (a *Allocator) SetLimit(limit int) {
+	a.mu.Lock()
+	a.limit = limit
+	a.local.SetLimit(rate.Limit(limit))
+	a.mu.Unlock()
 }
