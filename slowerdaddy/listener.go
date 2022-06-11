@@ -81,3 +81,10 @@ func (l *Listener) SetTotalLimit(limit int) error {
 	l.limiter.SetBurst(limit)
 	return nil
 }
+
+func (l *Listener) SetConnLimit2(limit int) error {
+	for _, conn := range l.conns {
+		conn.alloc.SetLocalLimit(limit)
+	}
+	return nil
+}

@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	limitConn  = 100
-	limitTotal = 1000
-	addr       = ":8080"
+	limitConn  = 1024
+	limitTotal = 1024 << 20 // 1GB
+	addr       = ":8081"
 	proto      = "tcp"
 	fileName   = "lorem"
 )
@@ -27,6 +27,15 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		go func() {
+			// fmt.Println("starting to read file")
+			// <-time.After(time.Second * 1)
+			// fmt.Println("new limit")
+			// ln.SetConnLimit2(64)
+			// <-time.After(time.Second * 1)
+			// fmt.Println("new limit")
+			// ln.SetConnLimit2(1280)
+		}()
 		_, _ = io.Copy(w, f)
 	})
 

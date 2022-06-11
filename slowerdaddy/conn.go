@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net"
-	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -27,17 +26,13 @@ type Conn struct {
 // time limit; see SetDeadline and SetReadDeadline.
 // Read will obey quota rules set by Listener
 func (c *Conn) Read(b []byte) (n int, err error) {
-	quotaToRequest := len(b)
-	if quotaToRequest > c.alloc.limit {
-		quotaToRequest = c.alloc.limit
+	ctx := context.Background()
+	granted, err := c.alloc.TryAlloc(ctx, len(b))
+	if err != nil {
+		return 0, err
 	}
 
-	quota, ok := c.alloc.TryAlloc(quotaToRequest)
-	for !ok {
-		quota, ok = c.alloc.TryAlloc(quotaToRequest)
-	}
-
-	return c.Conn.Read(b[:quota])
+	return c.Conn.Read(b[:granted])
 }
 
 // Write writes data to the connection.
@@ -45,21 +40,17 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // time limit; see SetDeadline and SetWriteDeadline.
 // Write will obey quota rules set by Listener
 func (c *Conn) Write(b []byte) (n int, err error) {
-	quotaToRequest := len(b)
-	if quotaToRequest > c.alloc.limit {
-		quotaToRequest = c.alloc.limit
+	ctx := context.Background()
+	granted, err := c.alloc.TryAlloc(ctx, len(b))
+	if err != nil {
+		return 0, err
 	}
-
-	grantedQuota, ok := c.alloc.TryAlloc(quotaToRequest)
-	for !ok {
-		grantedQuota, ok = c.alloc.TryAlloc(quotaToRequest)
-		time.Sleep(time.Second)
-	}
+	log.Println("write has been granted", granted)
 
 	written := 0
 	total := len(b)
 	for written < total {
-		tail := written + grantedQuota
+		tail := written + granted
 		if tail > total {
 			tail = total
 		}
@@ -71,12 +62,12 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		log.Println("wrote", n, "bytes")
 
 		written += n
-		quotaToRequest = len(b[written:])
-		grantedQuota, ok = c.alloc.TryAlloc(quotaToRequest)
-		for !ok {
-			grantedQuota, ok = c.alloc.TryAlloc(quotaToRequest)
-			time.Sleep(time.Second)
+		quotaToRequest := len(b[written:])
+		granted, err = c.alloc.TryAlloc(ctx, quotaToRequest)
+		if err != nil {
+			return written, err
 		}
+		log.Println("write has been granted", granted)
 	}
 
 	return written, err
