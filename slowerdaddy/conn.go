@@ -2,18 +2,10 @@ package slowerdaddy
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
-
-	"golang.org/x/time/rate"
 )
-
-// Limiter is a rate limiter used to limit the bandwidth of a net.Conn.
-type Limiter interface {
-	WaitN(context.Context, int) error
-	SetLimit(rate.Limit)
-	SetBurst(int)
-}
 
 var _ net.Conn = (*Conn)(nil)
 
@@ -29,9 +21,9 @@ type Conn struct {
 // Read will obey quota rules set by Listener
 func (c *Conn) Read(b []byte) (n int, err error) {
 	ctx := context.Background()
-	granted, err := c.alloc.TryAlloc(ctx, len(b))
+	granted, err := c.alloc.Alloc(ctx, len(b))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to allocate quota: %w", err)
 	}
 
 	return c.Conn.Read(b[:granted])
@@ -43,9 +35,9 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // Write will obey quota rules set by Listener
 func (c *Conn) Write(b []byte) (n int, err error) {
 	ctx := context.Background()
-	granted, err := c.alloc.TryAlloc(ctx, len(b))
+	granted, err := c.alloc.Alloc(ctx, len(b))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to allocate quota: %w", err)
 	}
 	log.Println("write has been granted", granted)
 
@@ -68,9 +60,9 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		if quotaToRequest == 0 {
 			break
 		}
-		granted, err = c.alloc.TryAlloc(ctx, quotaToRequest)
+		granted, err = c.alloc.Alloc(ctx, quotaToRequest)
 		if err != nil {
-			return written, err
+			return written, fmt.Errorf("failed to allocate quota: %w", err)
 		}
 		log.Println("write has been granted", granted)
 	}
