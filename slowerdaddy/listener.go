@@ -14,6 +14,8 @@ var (
 	ErrLimitGreaterThanTotal = errors.New("limit per conn cannot be greater than total limit")
 )
 
+var _ net.Listener = (*Listener)(nil)
+
 // Listener is a net.Listener that allows to control the bandwidth of the net.Conn connections and the limiter itself.
 type Listener struct {
 	mu sync.Mutex

@@ -15,6 +15,8 @@ type Limiter interface {
 	SetBurst(int)
 }
 
+var _ net.Conn = (*Conn)(nil)
+
 // Conn is a net.Conn that obeys quota limits set by Listener
 type Conn struct {
 	net.Conn

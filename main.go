@@ -13,7 +13,7 @@ import (
 
 var (
 	limitConn  = 512
-	limitTotal = 1024 // 1GB
+	limitTotal = 1024
 	addr       = ":8080"
 	proto      = "tcp"
 	fileName   = "lorem"
