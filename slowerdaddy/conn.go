@@ -63,6 +63,9 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 
 		written += n
 		quotaToRequest := len(b[written:])
+		if quotaToRequest == 0 {
+			break
+		}
 		granted, err = c.alloc.TryAlloc(ctx, quotaToRequest)
 		if err != nil {
 			return written, err
@@ -71,4 +74,9 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	}
 
 	return written, err
+}
+
+func (c *Conn) Close() error {
+	c.alloc.Close()
+	return c.Conn.Close()
 }

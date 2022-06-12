@@ -1,18 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/charconstpointer/slowerdaddy/slowerdaddy"
 )
 
 var (
-	limitConn  = 1024
-	limitTotal = 1024 << 20 // 1GB
-	addr       = ":8081"
+	limitConn  = 512
+	limitTotal = 1024 // 1GB
+	addr       = ":8080"
 	proto      = "tcp"
 	fileName   = "lorem"
 )
@@ -28,13 +30,13 @@ func main() {
 			log.Fatal(err)
 		}
 		go func() {
-			// fmt.Println("starting to read file")
-			// <-time.After(time.Second * 1)
-			// fmt.Println("new limit")
-			// ln.SetConnLimit2(64)
-			// <-time.After(time.Second * 1)
-			// fmt.Println("new limit")
-			// ln.SetConnLimit2(1280)
+			fmt.Println("starting to read file")
+			<-time.After(time.Second * 1)
+			fmt.Println("new limit")
+			ln.SetLocalLimit(64)
+			<-time.After(time.Second * 1)
+			fmt.Println("new limit")
+			ln.SetLocalLimit(700)
 		}()
 		_, _ = io.Copy(w, f)
 	})

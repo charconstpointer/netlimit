@@ -2,8 +2,9 @@ package slowerdaddy
 
 import (
 	"errors"
-	"log"
 	"net"
+	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -15,13 +16,11 @@ var (
 
 // Listener is a net.Listener that allows to control the bandwidth of the net.Conn connections and the limiter itself.
 type Listener struct {
+	mu sync.Mutex
 	net.Listener
-	// limiter is the rate limiter used to limit the bandwidth of a net.Conn.
-	limiter *rate.Limiter
-	conns   []*Conn
-	// limitConn is the limit of the bandwidth of a single net.Conn.
-	limitConn int
-	// limitTotal is the limit of the bandwidth of all net.Conn connections currently active combined.
+	limiter    *rate.Limiter
+	conns      []*Conn
+	limitConn  int
 	limitTotal int
 }
 
@@ -59,32 +58,24 @@ func (l *Listener) Accept() (net.Conn, error) {
 	return newConn, nil
 }
 
-// SetConnLimit sets the limit of the bandwidth of a single net.Conn.
-func (l *Listener) SetConnLimit(limit int) error {
+// SetTotalLimit sets the limit of the bandwidth of all net.Conn connections currently active combined.
+func (l *Listener) SetTotalLimit(limit int) error {
+	l.mu.Lock()
+	l.limiter.AllowN(time.Now(), l.limitTotal)
+	l.limiter.SetLimit(rate.Limit(limit))
+	l.limiter.SetBurst(limit)
+	l.limitTotal = limit
+	l.mu.Unlock()
+	return nil
+}
+
+func (l *Listener) SetLocalLimit(limit int) error {
 	if limit > l.limitTotal {
 		return ErrLimitGreaterThanTotal
 	}
 
 	for _, conn := range l.conns {
 		conn.alloc.SetLimit(limit)
-	}
-
-	l.limitConn = limit
-	log.Println("set conn limit to", l.limitConn)
-	return nil
-}
-
-// SetTotalLimit sets the limit of the bandwidth of all net.Conn connections currently active combined.
-func (l *Listener) SetTotalLimit(limit int) error {
-	l.limitTotal = limit
-	l.limiter.SetLimit(rate.Limit(limit))
-	l.limiter.SetBurst(limit)
-	return nil
-}
-
-func (l *Listener) SetConnLimit2(limit int) error {
-	for _, conn := range l.conns {
-		conn.alloc.SetLocalLimit(limit)
 	}
 	return nil
 }

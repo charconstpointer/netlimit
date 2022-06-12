@@ -2,6 +2,7 @@ package slowerdaddy
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -9,13 +10,19 @@ import (
 	"golang.org/x/time/rate"
 )
 
+var (
+	ErrLimitChangedInflight = errors.New("limit changed while inflight")
+)
+
 type Allocator struct {
 	mu      sync.Mutex
 	global  *rate.Limiter
 	local   *rate.Limiter
 	updates chan UpdateQuotaRequest
+	done    chan struct{}
 	limit   int
 }
+
 type UpdateQuotaRequest int64
 
 type QuotaRequest struct {
@@ -33,43 +40,10 @@ func NewAllocator(global *rate.Limiter, limit int) *Allocator {
 	}
 }
 
-func (a *Allocator) Alloc(amount int) (int, bool) {
-	quota := amount
-	if amount > a.limit {
-		quota = a.limit
-	}
-	log.Println("checking possible alloc of", quota, "bytes in global limiter")
-	if ok := a.global.AllowN(time.Now(), quota); !ok {
-		log.Println("global quota exceeded")
-		return 0, false
-	}
-	log.Println("trying to alloc", quota, "bytes in local limiter")
-	if err := a.global.WaitN(context.Background(), quota); err != nil {
-		log.Println("global wait failed:", err)
-		return 0, false
-	}
-
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if ok := a.local.AllowN(time.Now(), quota); !ok {
-		log.Println("local quota exceeded")
-		return 0, false
-	}
-	if err := a.local.WaitN(context.Background(), quota); err != nil {
-		log.Println("local wait failed:", err)
-		return 0, false
-	}
-
-	log.Printf("grated %d quota for", quota)
-	return quota, true
-}
-
-type RequestQuotaResponse struct {
-	Quota int
-	OK    bool
-}
-
 func (a *Allocator) TryAlloc(ctx context.Context, amount int) (int, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	quota := amount
 	if amount > a.limit {
 		quota = a.limit
@@ -77,62 +51,77 @@ func (a *Allocator) TryAlloc(ctx context.Context, amount int) (int, error) {
 
 	var okGlobal, okLocal bool
 	for !okGlobal {
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
+		if amount > a.limit {
+			quota = a.limit
+		} else {
+			quota = amount
+		}
 		okGlobal = a.tryAllocLocal(ctx, a.global, quota)
 	}
 
 	for !okLocal {
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
+		if amount > a.limit {
+			quota = a.limit
+		} else {
+			quota = amount
+		}
 		okLocal = a.tryAllocLocal(ctx, a.local, quota)
 	}
+
 	return quota, nil
-}
-
-func (a *Allocator) SetLimit(limit int) {
-	a.mu.Lock()
-	a.limit = limit
-	a.local.SetLimit(rate.Limit(limit))
-	a.local.AllowN(time.Now(), limit)
-	a.mu.Unlock()
-}
-
-func (a *Allocator) SetLocalLimit(limit int) {
-	a.mu.Lock()
-	a.limit = limit
-	a.local.SetLimit(rate.Limit(limit))
-	a.local.SetBurst(limit)
-	a.local.AllowN(time.Now(), limit)
-	a.mu.Unlock()
-	a.updates <- UpdateQuotaRequest(limit)
-	log.Println("allocator: new limit:", limit)
 }
 
 func (a *Allocator) tryAllocLocal(ctx context.Context, limiter *rate.Limiter, quota int) bool {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	allowedLocal := make(chan bool, 1)
+
 	go func() {
 		if err := limiter.WaitN(ctx, quota); err != nil {
+			if errors.Is(err, context.Canceled) {
+				log.Println("allocator: context canceled")
+			}
 			allowedLocal <- false
 		}
 		allowedLocal <- true
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return false
-		case allowed := <-allowedLocal:
-			if !allowed {
-				return false
-			}
-			return true
-		case newLimit := <-a.updates:
-			cancel()
-			log.Println("new limit:", newLimit)
+	select {
+	case <-ctx.Done():
+		return false
+	case allowed := <-allowedLocal:
+		if !allowed {
 			return false
 		}
+		return true
+	case newLimit := <-a.updates:
+		cancel()
+		log.Println("new limit:", newLimit)
+		return false
+	case <-a.done:
+		cancel()
+		return false
 	}
+}
+
+func (a *Allocator) SetLimit(limit int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.limit = limit
+	a.local.SetLimit(rate.Limit(limit))
+	a.local.SetBurst(limit)
+	a.local.AllowN(time.Now(), limit)
+	select {
+	//there is a leftover update from the previous limit, we can ignore it
+	case <-a.updates:
+		a.updates <- UpdateQuotaRequest(limit)
+	default:
+		a.updates <- UpdateQuotaRequest(limit)
+	}
+
+	log.Println("allocator: new limit:", a.limit)
+}
+
+func (a *Allocator) Close() {
+	a.done <- struct{}{}
 }
