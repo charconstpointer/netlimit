@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -12,8 +11,8 @@ import (
 )
 
 var (
-	limitConn  = 512
-	limitTotal = 1024 // 1GB
+	limitConn  = 12
+	limitTotal = 512
 	addr       = ":8080"
 	proto      = "tcp"
 	fileName   = "lorem"
@@ -30,13 +29,8 @@ func main() {
 			log.Fatal(err)
 		}
 		go func() {
-			fmt.Println("starting to read file")
-			<-time.After(time.Second * 1)
-			fmt.Println("new limit")
-			ln.SetLocalLimit(64)
-			<-time.After(time.Second * 1)
-			fmt.Println("new limit")
-			ln.SetLocalLimit(700)
+			time.Sleep(time.Second * 5)
+			ln.SetLocalLimit(144)
 		}()
 		_, _ = io.Copy(w, f)
 	})
