@@ -27,12 +27,6 @@ type Allocator struct {
 
 type UpdateQuotaRequest int64
 
-type QuotaRequest struct {
-	allowCh chan int
-	ConnID  string
-	Value   int
-}
-
 // NewAllocator creates a new allocator with the given global and local limits.
 // Allocator controls requested bandwith allocations and ensures that they not exceed requested limits.
 func NewAllocator(global *rate.Limiter, limit int) *Allocator {
