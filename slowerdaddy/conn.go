@@ -3,7 +3,6 @@ package slowerdaddy
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 )
 
@@ -39,7 +38,6 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to allocate quota: %w", err)
 	}
-	log.Println("write has been granted", granted)
 
 	written := 0
 	total := len(b)
@@ -53,7 +51,6 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		if err != nil {
 			return written, err
 		}
-		log.Println("wrote", n, "bytes")
 
 		written += n
 		quotaToRequest := len(b[written:])
@@ -64,9 +61,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		if err != nil {
 			return written, fmt.Errorf("failed to allocate quota: %w", err)
 		}
-		log.Println("write has been granted", granted)
 	}
-
 	return written, err
 }
 
