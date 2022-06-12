@@ -1,28 +1,48 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/charconstpointer/slowerdaddy/slowerdaddy"
 )
 
+var (
+	limitConn  = 512
+	limitTotal = 1024 // 1GB
+	addr       = ":8080"
+	proto      = "tcp"
+	fileName   = "lorem"
+)
+
 func main() {
-	limitConn := 1 * 100
-	limitTotal := 1 * 100
-	ln, err := slowerdaddy.Listen("tcp", ":8080", limitTotal, limitConn)
+	ln, err := slowerdaddy.Listen(proto, addr, limitTotal, limitConn)
 	if err != nil {
 		log.Fatal(err)
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		f, err := os.Open("lorem")
+		f, err := os.Open(fileName)
 		if err != nil {
 			log.Fatal(err)
 		}
+		go func() {
+			fmt.Println("starting to read file")
+			<-time.After(time.Second * 1)
+			fmt.Println("new limit")
+			ln.SetLocalLimit(64)
+			<-time.After(time.Second * 1)
+			fmt.Println("new limit")
+			ln.SetLocalLimit(700)
+		}()
 		_, _ = io.Copy(w, f)
 	})
 
-	http.Serve(ln, handler)
+	err = http.Serve(ln, handler)
+	if err != nil {
+		return
+	}
 }

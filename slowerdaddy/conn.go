@@ -2,19 +2,23 @@ package slowerdaddy
 
 import (
 	"context"
+	"log"
 	"net"
+
+	"golang.org/x/time/rate"
 )
 
 // Limiter is a rate limiter used to limit the bandwidth of a net.Conn.
 type Limiter interface {
 	WaitN(context.Context, int) error
+	SetLimit(rate.Limit)
+	SetBurst(int)
 }
 
 // Conn is a net.Conn that obeys quota limits set by Listener
 type Conn struct {
 	net.Conn
-	limiter Limiter
-	limit   int
+	alloc *Allocator
 }
 
 // Read reads data from the connection.
@@ -22,20 +26,13 @@ type Conn struct {
 // time limit; see SetDeadline and SetReadDeadline.
 // Read will obey quota rules set by Listener
 func (c *Conn) Read(b []byte) (n int, err error) {
-	quota := c.limit
-	if len(b) < c.limit {
-		quota = len(b)
-	}
-
-	if err := c.limiter.WaitN(context.Background(), quota); err != nil {
+	ctx := context.Background()
+	granted, err := c.alloc.TryAlloc(ctx, len(b))
+	if err != nil {
 		return 0, err
 	}
 
-	n, err = c.Conn.Read(b[:quota])
-	if err != nil {
-		return n, err
-	}
-	return n, err
+	return c.Conn.Read(b[:granted])
 }
 
 // Write writes data to the connection.
@@ -43,25 +40,43 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // time limit; see SetDeadline and SetWriteDeadline.
 // Write will obey quota rules set by Listener
 func (c *Conn) Write(b []byte) (n int, err error) {
-	quota := c.limit
+	ctx := context.Background()
+	granted, err := c.alloc.TryAlloc(ctx, len(b))
+	if err != nil {
+		return 0, err
+	}
+	log.Println("write has been granted", granted)
+
 	written := 0
-	for written < len(b) {
-		if len(b[written:]) < c.limit {
-			quota = len(b[written:])
+	total := len(b)
+	for written < total {
+		tail := written + granted
+		if tail > total {
+			tail = total
 		}
-		if err := c.limiter.WaitN(context.Background(), quota); err != nil {
-			return 0, err
-		}
-		tail := written + quota
-		if tail > len(b) {
-			tail = len(b)
-		}
+
 		n, err = c.Conn.Write(b[written:tail])
 		if err != nil {
 			return written, err
 		}
+		log.Println("wrote", n, "bytes")
+
 		written += n
+		quotaToRequest := len(b[written:])
+		if quotaToRequest == 0 {
+			break
+		}
+		granted, err = c.alloc.TryAlloc(ctx, quotaToRequest)
+		if err != nil {
+			return written, err
+		}
+		log.Println("write has been granted", granted)
 	}
 
 	return written, err
+}
+
+func (c *Conn) Close() error {
+	c.alloc.Close()
+	return c.Conn.Close()
 }
