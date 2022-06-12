@@ -3,6 +3,7 @@ package slowerdaddy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -48,8 +49,12 @@ func (a *Allocator) Alloc(ctx context.Context, requestedQuota int) (int, error) 
 	}
 
 	availableAt := time.NewTimer(reservation.DelayFrom(time.Now()))
-	err := a.allocLocal(ctx, grantedQuota)
-	if err != nil {
+	var err error
+	for err == ErrLimitChangedInflight {
+		err = a.allocLocal(ctx, grantedQuota)
+	}
+
+	if err != nil && err != ErrLimitChangedInflight {
 		return 0, err
 	}
 
@@ -68,43 +73,28 @@ func (a *Allocator) reserveGlobal(ctx context.Context, quota int) (int, *rate.Re
 func (a *Allocator) allocLocal(ctx context.Context, quota int) error {
 	err := a.tryAllocLocal(ctx, a.local, quota)
 	if err != nil {
-		if errors.Is(err, ErrLimitChangedInflight) {
-			err = a.tryAllocLocal(ctx, a.local, quota)
-		}
-		if errors.Is(err, ErrAllocatorClosed) {
-			return err
-		}
-		if errors.Is(err, context.Canceled) {
-			return err
-		}
+		return err
 	}
 	return nil
 }
 
 func (a *Allocator) tryAllocLocal(ctx context.Context, limiter *rate.Limiter, quota int) error {
-	type allocResult struct {
-		err     error
-		success bool
-	}
-
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	allowedLocal := make(chan allocResult, 1)
+	allowedLocal := make(chan bool, 1)
 
 	go func() {
 		if err := limiter.WaitN(ctx, quota); err != nil {
-			allowedLocal <- allocResult{err, false}
+			allowedLocal <- false
 		}
-		allowedLocal <- allocResult{nil, true}
+		allowedLocal <- true
 	}()
 
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
 	case allowed := <-allowedLocal:
-		if !allowed.success {
-			return allowed.err
+		if !allowed {
+			return fmt.Errorf("could not allocate quota in local limiter")
 		}
 		return nil
 	case <-a.updates:
