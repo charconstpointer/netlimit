@@ -14,6 +14,7 @@ type Conn struct {
 	a *Allocator
 }
 
+// NewConn returns a new Conn that obeys quota limits set by Listener
 func NewConn(conn net.Conn, a *Allocator) *Conn {
 	return &Conn{Conn: conn, a: a}
 }

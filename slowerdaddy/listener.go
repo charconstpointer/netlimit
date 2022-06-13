@@ -71,6 +71,7 @@ func (l *Listener) SetGlobalLimit(limit int) error {
 	return nil
 }
 
+// SetLocalLimit sets the limit of the bandwidth of all net.Conn active and future connections accepted by the listener.
 func (l *Listener) SetLocalLimit(newLocalLimit int) error {
 	if newLocalLimit > l.globalLimit {
 		return ErrLimitGreaterThanTotal
