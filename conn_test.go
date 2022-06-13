@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charconstpointer/netlimit"
+	"golang.org/x/net/nettest"
 	"golang.org/x/time/rate"
 )
 
@@ -45,13 +46,13 @@ func TestConn_Read(t *testing.T) {
 			defer func(recv net.Conn) {
 				err := recv.Close()
 				if err != nil {
-
+					t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			}(recv)
 			defer func(sender net.Conn) {
 				err := sender.Close()
 				if err != nil {
-
+					t.Errorf("Close() error = %v", err)
 				}
 			}(sender)
 			a := netlimit.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
@@ -61,7 +62,7 @@ func TestConn_Read(t *testing.T) {
 			go func() {
 				_, err := senderConn.Write(tt.args.msg)
 				if err != nil {
-
+					t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
 				}
 			}()
 			// read data from receiver
@@ -166,4 +167,17 @@ func TestConn_Write(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNetConn(t *testing.T) {
+	nettest.TestConn(t, func() (c1 net.Conn, c2 net.Conn, stop func(), err error) {
+		conn1, conn2 := net.Pipe()
+		a := netlimit.NewDefaultAllocator(rate.NewLimiter(rate.Inf, 1024<<8), 10)
+		c1 = netlimit.NewConn(conn1, a)
+		c2 = netlimit.NewConn(conn2, a)
+		return c1, c2, func() {
+			conn1.Close()
+			conn2.Close()
+		}, nil
+	})
 }
