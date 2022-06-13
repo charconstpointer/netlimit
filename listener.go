@@ -3,7 +3,6 @@ package netlimit
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -124,7 +123,6 @@ func (l *Listener) removeAlloc(a Allocator) error {
 	for i, alloc := range l.conns {
 		if alloc == a {
 			l.conns = append(l.conns[:i], l.conns[i+1:]...)
-			log.Println("removed alloc")
 			return nil
 		}
 	}
