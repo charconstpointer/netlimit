@@ -120,3 +120,86 @@ func TestAllocator_Alloc(t *testing.T) {
 		})
 	}
 }
+
+//func TestAllocator_AllocConcurrent(t *testing.T) {
+//	type fields struct {
+//		global       *rate.Limiter
+//		localLimit   int
+//		globalLimit  int
+//		wantOffsetBy int
+//	}
+//	type args struct {
+//		ctx            context.Context
+//		requestedQuota int
+//	}
+//	var tests = []struct {
+//		name   string
+//		args   args
+//		fields fields
+//	}{
+//		{
+//			name: "alloc concurrent",
+//			args: args{
+//				ctx:            context.Background(),
+//				requestedQuota: 10,
+//			},
+//			fields: fields{
+//				localLimit:   10,
+//				globalLimit:  10,
+//				global:       rate.NewLimiter(rate.Limit(10), 10),
+//				wantOffsetBy: 1,
+//			},
+//		},
+//		{
+//			name: "alloc concurrent",
+//			args: args{
+//				ctx:            context.Background(),
+//				requestedQuota: 4,
+//			},
+//			fields: fields{
+//				localLimit:   4,
+//				globalLimit:  4,
+//				global:       rate.NewLimiter(rate.Limit(10), 10),
+//				wantOffsetBy: 0,
+//			},
+//		},
+//		{
+//			name: "alloc concurrent",
+//			args: args{
+//				ctx:            context.Background(),
+//				requestedQuota: 3,
+//			},
+//			fields: fields{
+//				localLimit:   1,
+//				globalLimit:  1,
+//				global:       rate.NewLimiter(rate.Limit(10), 10),
+//				wantOffsetBy: 3,
+//			},
+//		},
+//	}
+//	for _, tt := range tests {
+//		t.Run(tt.name, func(t *testing.T) {
+//			globalLimiter := rate.NewLimiter(rate.Limit(tt.fields.globalLimit), tt.fields.globalLimit)
+//			first := slowerdaddy.NewAllocator(globalLimiter, tt.fields.localLimit)
+//			second := slowerdaddy.NewAllocator(globalLimiter, tt.fields.localLimit)
+//			ctx := context.Background()
+//			n, err := first.Alloc(ctx, tt.args.requestedQuota)
+//			if err != nil {
+//				t.Errorf("first.Alloc() error = %v", err)
+//			}
+//			firstAllocDone := time.Now()
+//			if n != tt.args.requestedQuota {
+//				t.Errorf("first.Alloc() got = %v, want %v", n, tt.args.requestedQuota)
+//			}
+//			n, err = second.Alloc(ctx, tt.args.requestedQuota)
+//			if err != nil {
+//				t.Errorf("second.Alloc() error = %v", err)
+//			}
+//			secondAllocDone := time.Now()
+//			diff := secondAllocDone.Sub(firstAllocDone).Seconds()
+//			if int(diff) != tt.fields.wantOffsetBy {
+//				t.Errorf("first.Alloc() and second.Alloc() should not be in the same second")
+//			}
+//		})
+//	}
+//}

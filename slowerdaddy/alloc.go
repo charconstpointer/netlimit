@@ -18,8 +18,8 @@ var (
 
 type Allocator struct {
 	mu             sync.Mutex
-	global         *rate.Limiter
-	local          *rate.Limiter
+	global         Limiter
+	local          Limiter
 	localUpdatesCh chan UpdateQuotaRequest
 	localLimit     int
 	globalLimit    int
@@ -27,9 +27,18 @@ type Allocator struct {
 
 type UpdateQuotaRequest int
 
+type Limiter interface {
+	ReserveN(now time.Time, n int) *rate.Reservation
+	Limit() rate.Limit
+	WaitN(ctx context.Context, quota int) error
+	AllowN(now time.Time, limit int) bool
+	SetLimit(limit rate.Limit)
+	SetBurst(limit int)
+}
+
 // NewAllocator creates a new allocator with the given global and local limits.
 // Allocator controls requested bandwidth allocations and ensures that they not exceed requested limits.
-func NewAllocator(global *rate.Limiter, limit int) *Allocator {
+func NewAllocator(global Limiter, limit int) *Allocator {
 	return &Allocator{
 		local:          rate.NewLimiter(rate.Limit(limit), limit),
 		global:         global,
