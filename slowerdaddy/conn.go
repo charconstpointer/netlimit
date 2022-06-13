@@ -11,7 +11,11 @@ var _ net.Conn = (*Conn)(nil)
 // Conn is a net.Conn that obeys quota limits set by Listener
 type Conn struct {
 	net.Conn
-	alloc *Allocator
+	a *Allocator
+}
+
+func NewConn(conn net.Conn, a *Allocator) *Conn {
+	return &Conn{Conn: conn, a: a}
 }
 
 // Read reads data from the connection.
@@ -20,7 +24,7 @@ type Conn struct {
 // Read will obey quota rules set by Listener
 func (c *Conn) Read(b []byte) (n int, err error) {
 	ctx := context.Background()
-	granted, err := c.alloc.Alloc(ctx, len(b))
+	granted, err := c.a.Alloc(ctx, len(b))
 	if err != nil {
 		return 0, fmt.Errorf("failed to allocate quota: %w", err)
 	}
@@ -34,7 +38,7 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // Write will obey quota rules set by Listener
 func (c *Conn) Write(b []byte) (n int, err error) {
 	ctx := context.Background()
-	granted, err := c.alloc.Alloc(ctx, len(b))
+	granted, err := c.a.Alloc(ctx, len(b))
 	if err != nil {
 		return 0, fmt.Errorf("failed to allocate quota: %w", err)
 	}
@@ -57,15 +61,10 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		if quotaToRequest == 0 {
 			break
 		}
-		granted, err = c.alloc.Alloc(ctx, quotaToRequest)
+		granted, err = c.a.Alloc(ctx, quotaToRequest)
 		if err != nil {
 			return written, fmt.Errorf("failed to allocate quota: %w", err)
 		}
 	}
 	return written, err
-}
-
-func (c *Conn) Close() error {
-	c.alloc.Close()
-	return c.Conn.Close()
 }
