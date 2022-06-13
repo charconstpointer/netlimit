@@ -10,6 +10,9 @@ var _ net.Conn = (*Conn)(nil)
 
 type Allocator interface {
 	Alloc(ctx context.Context, n int) (int, error)
+	SetLimit(limit int) error
+	Close() error
+	Done() <-chan struct{}
 }
 
 // Conn is a net.Conn that obeys quota limits set by Listener
@@ -72,4 +75,13 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		}
 	}
 	return written, err
+}
+
+func (c *Conn) Close() error {
+	err := c.a.Close()
+	if err != nil {
+		return err
+	}
+
+	return c.Conn.Close()
 }

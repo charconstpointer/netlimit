@@ -2,8 +2,11 @@ package netlimit
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"net"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
@@ -21,7 +24,7 @@ type Listener struct {
 	mu sync.Mutex
 	net.Listener
 	limiter     *rate.Limiter
-	conns       []*DefaultAllocator
+	conns       []Allocator
 	localLimit  int
 	globalLimit int
 }
@@ -33,15 +36,17 @@ func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) 
 	if err != nil {
 		return nil, err
 	}
-
 	limiter := rate.NewLimiter(rate.Limit(limitTotal), limitTotal)
 
-	return &Listener{
+	limitedLn := &Listener{
 		Listener:    ln,
 		localLimit:  limitConn,
 		globalLimit: limitTotal,
 		limiter:     limiter,
-	}, nil
+	}
+
+	go limitedLn.gc()
+	return limitedLn, nil
 }
 
 // Accept waits for and returns the next connection to the listener.
@@ -95,4 +100,33 @@ func (l *Listener) SetLocalLimit(newLocalLimit int) error {
 
 	l.localLimit = newLocalLimit
 	return nil
+}
+
+func (l *Listener) gc() {
+	for {
+		for _, alloc := range l.conns {
+			alloc := alloc
+			select {
+			case <-alloc.Done():
+				l.mu.Lock()
+				l.removeAlloc(alloc)
+				l.mu.Unlock()
+			default:
+			}
+			time.Sleep(time.Second)
+		}
+	}
+}
+
+func (l *Listener) removeAlloc(a Allocator) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i, alloc := range l.conns {
+		if alloc == a {
+			l.conns = append(l.conns[:i], l.conns[i+1:]...)
+			log.Println("removed alloc")
+			return nil
+		}
+	}
+	return fmt.Errorf("allocator not found")
 }

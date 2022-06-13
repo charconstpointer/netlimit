@@ -29,6 +29,9 @@ type DefaultAllocator struct {
 
 	// limitUpdates is a channel used to signal that the local limit has changed
 	limitUpdates chan struct{}
+
+	// done is a channel used to signal that the allocator is done
+	done chan struct{}
 }
 
 // NewDefaultAllocator creates a new allocator with the given global and local limits.
@@ -38,6 +41,7 @@ func NewDefaultAllocator(global *rate.Limiter, limit int) *DefaultAllocator {
 		local:        rate.NewLimiter(rate.Limit(limit), limit),
 		global:       global,
 		limitUpdates: make(chan struct{}, 1),
+		done:         make(chan struct{}, 1),
 	}
 }
 
@@ -133,5 +137,18 @@ func (a *DefaultAllocator) SetLimit(limit int) error {
 		a.limitUpdates <- struct{}{}
 	}
 
+	return nil
+}
+
+func (a *DefaultAllocator) Done() <-chan struct{} {
+	return a.done
+}
+
+func (a *DefaultAllocator) Close() error {
+	select {
+	case a.done <- struct{}{}:
+	default:
+		return fmt.Errorf("allocator already closed")
+	}
 	return nil
 }
