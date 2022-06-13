@@ -2,7 +2,6 @@ package netlimit
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -22,10 +21,24 @@ var _ net.Listener = (*Listener)(nil)
 type Listener struct {
 	mu sync.Mutex
 	net.Listener
-	limiter     *rate.Limiter
-	conns       []Allocator
-	localLimit  int
+
+	// limiter is the global limiter that is the upper bound of all net.Conn connections combined
+	// all connections combined cannot exceed limits enforced by this limiter.
+	limiter *rate.Limiter
+
+	// conns is the list of currently "active" Conn connections.
+	// conns are created when a new connection is accepted
+	conns []*Conn
+
+	// localLimit is the limit of the bandwidth allowed for a single net.Conn connection per second
+	localLimit int
+
+	// globalLimit is the limit of the bandwidth allowed for all net.Conn connections combined per second
+	// cannot be lower than localLimit
 	globalLimit int
+
+	// gcInterval
+	gcInterval time.Duration
 }
 
 // Listen returns a Listener that will be bound to addr with the specified limits.
@@ -42,6 +55,7 @@ func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) 
 		localLimit:  limitConn,
 		globalLimit: limitTotal,
 		limiter:     limiter,
+		gcInterval:  time.Second,
 	}
 
 	go limitedLn.gc()
@@ -59,7 +73,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 	newConn := NewConn(conn, alloc)
 
 	l.mu.Lock()
-	l.conns = append(l.conns, alloc)
+	l.conns = append(l.conns, newConn)
 	l.mu.Unlock()
 
 	return newConn, nil
@@ -103,28 +117,25 @@ func (l *Listener) SetLocalLimit(newLocalLimit int) error {
 
 func (l *Listener) gc() {
 	for {
-		for _, alloc := range l.conns {
-			alloc := alloc
+		l.mu.Lock()
+		for _, conn := range l.conns {
+			conn := conn
 			select {
-			case <-alloc.Done():
-				l.mu.Lock()
-				l.removeAlloc(alloc)
-				l.mu.Unlock()
+			case <-conn.done:
+				l.conns = remove(l.conns, conn)
 			default:
 			}
-			time.Sleep(time.Second)
 		}
+		l.mu.Unlock()
+		time.Sleep(l.gcInterval)
 	}
 }
 
-func (l *Listener) removeAlloc(a Allocator) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	for i, alloc := range l.conns {
-		if alloc == a {
-			l.conns = append(l.conns[:i], l.conns[i+1:]...)
-			return nil
+func remove(slice []*Conn, elem *Conn) []*Conn {
+	for i, v := range slice {
+		if v == elem {
+			return append(slice[:i], slice[i+1:]...)
 		}
 	}
-	return fmt.Errorf("allocator not found")
+	return slice
 }

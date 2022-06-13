@@ -11,19 +11,26 @@ var _ net.Conn = (*Conn)(nil)
 type Allocator interface {
 	Alloc(ctx context.Context, n int) (int, error)
 	SetLimit(limit int) error
-	Close() error
-	Done() <-chan struct{}
 }
 
 // Conn is a net.Conn that obeys quota limits set by Listener
 type Conn struct {
 	net.Conn
+
+	// a is the allocator that controls the quota for this connection
 	a Allocator
+
+	// done is a channel used to signal that the connection is closed and ready to be gc'd
+	done chan struct{}
 }
 
 // NewConn returns a new Conn that obeys quota limits set by Listener
 func NewConn(conn net.Conn, a Allocator) *Conn {
-	return &Conn{Conn: conn, a: a}
+	return &Conn{
+		Conn: conn,
+		a:    a,
+		done: make(chan struct{}, 1),
+	}
 }
 
 // Read reads data from the connection.
@@ -77,11 +84,13 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	return written, err
 }
 
-func (c *Conn) Close() error {
-	err := c.a.Close()
-	if err != nil {
-		return err
-	}
+// SetLimit sets the limit of the local limiter.
+func (c *Conn) SetLimit(limit int) error {
+	return c.a.SetLimit(limit)
+}
 
+// Close closes the connection.
+func (c *Conn) Close() error {
+	c.done <- struct{}{}
 	return c.Conn.Close()
 }
