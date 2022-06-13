@@ -21,7 +21,7 @@ type Listener struct {
 	mu sync.Mutex
 	net.Listener
 	limiter     *rate.Limiter
-	conns       []*Allocator
+	conns       []*DefaultAllocator
 	localLimit  int
 	globalLimit int
 }
@@ -51,7 +51,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 
-	alloc := NewAllocator(l.limiter, l.localLimit)
+	alloc := NewDefaultAllocator(l.limiter, l.localLimit)
 	newConn := NewConn(conn, alloc)
 
 	l.mu.Lock()

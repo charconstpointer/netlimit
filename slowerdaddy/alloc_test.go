@@ -50,7 +50,7 @@ func TestAllocator_SetLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := slowerdaddy.NewAllocator(tt.fields.global, tt.fields.localLimit)
+			a := slowerdaddy.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
 			if err := a.SetLimit(tt.args.limit); (err != nil) != tt.wantErr {
 				t.Errorf("SetLimit() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -106,7 +106,7 @@ func TestAllocator_Alloc(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := slowerdaddy.NewAllocator(tt.fields.global, tt.fields.localLimit)
+			a := slowerdaddy.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
 			got, err := a.Alloc(tt.args.ctx, tt.args.requestedQuota)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Alloc() error = %v, wantErr %v", err, tt.wantErr)
