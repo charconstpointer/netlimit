@@ -1,8 +1,8 @@
-# slowerdaddy  
-#### slowerdaddy is a package that allows to control the bandwidth of the net.Conn connections and the limiter itself.
+# netlimit  
+#### netlimit is a package that allows to control the bandwidth of the net.Conn connections and the limiter itself.
 ---
 ### docs
-`https://pkg.go.dev/github.com/charconstpointer/slowerdaddy`
+`https://pkg.go.dev/github.com/charconstpointer/netlimit`
 
 
 ```
