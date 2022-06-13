@@ -157,9 +157,7 @@ func TestConn_Write(t *testing.T) {
 			if gotN != wantN {
 				t.Errorf("Read() gotN = %v, want %v", gotN, wantN)
 			}
-			// if rate != tt.fields.localLimit {
-			// 	t.Errorf("Read() rate = %v, want %v", rate, tt.fields.localLimit)
-			// }
+
 			read := tt.args.b[:gotN]
 			if string(tt.args.msg) != string(read) {
 				t.Errorf("Read() gotN = %v, want %v", string(read), string(tt.args.msg))
