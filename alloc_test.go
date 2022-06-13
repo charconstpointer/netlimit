@@ -69,9 +69,9 @@ func TestAllocator_Alloc(t *testing.T) {
 		requestedQuota int
 	}
 	var tests = []struct {
+		args    args
 		name    string
 		fields  fields
-		args    args
 		want    int
 		wantErr bool
 	}{
