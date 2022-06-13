@@ -1,7 +1,6 @@
 package netlimit_test
 
 import (
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -136,6 +135,7 @@ func TestConn_Write(t *testing.T) {
 					t.Errorf("Write() error = %v", err)
 				}
 			}()
+
 			now := time.Now()
 			// read data from receiver
 			gotN, err := recvConn.Read(tt.args.b)
@@ -143,6 +143,7 @@ func TestConn_Write(t *testing.T) {
 				t.Errorf("Read() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			elapsed := time.Since(now)
 			allowedErr := float64(tt.fields.localLimit) * tt.fields.marginError
 			rate := float64(len(tt.args.msg)) / elapsed.Seconds()
@@ -151,7 +152,7 @@ func TestConn_Write(t *testing.T) {
 			if left > rate || rate > right {
 				t.Errorf("Write() rate = %v, want %v", rate, tt.fields.localLimit)
 			}
-			fmt.Printf("rate: %v\n", rate)
+
 			wantN := len(tt.args.msg)
 			if gotN != wantN {
 				t.Errorf("Read() gotN = %v, want %v", gotN, wantN)
