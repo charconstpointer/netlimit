@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -18,37 +17,24 @@ var (
 
 type Allocator struct {
 	mu             sync.Mutex
-	global         Limiter
-	local          Limiter
+	global         *rate.Limiter
+	local          *rate.Limiter
 	localUpdatesCh chan UpdateQuotaRequest
-	localLimit     int
-	globalLimit    int
 }
 
 type UpdateQuotaRequest int
 
-type Limiter interface {
-	ReserveN(now time.Time, n int) *rate.Reservation
-	Limit() rate.Limit
-	WaitN(ctx context.Context, quota int) error
-	AllowN(now time.Time, limit int) bool
-	SetLimit(limit rate.Limit)
-	SetBurst(limit int)
-}
-
 // NewAllocator creates a new allocator with the given global and local limits.
 // Allocator controls requested bandwidth allocations and ensures that they not exceed requested limits.
-func NewAllocator(global Limiter, limit int) *Allocator {
+func NewAllocator(global *rate.Limiter, limit int) *Allocator {
 	return &Allocator{
 		local:          rate.NewLimiter(rate.Limit(limit), limit),
 		global:         global,
-		localLimit:     limit,
 		localUpdatesCh: make(chan UpdateQuotaRequest, 1),
 	}
 }
 
-// Alloc reserves quota in a global limiter and then blocks until it is allowed
-// to allocate in the local limiter.
+// Alloc reserves quota in a global limiter and then blocks until it is allowed to allocate in the local limiter.
 // Once the local limiter allows allocation, Alloc waits for the readiness or the global reservation
 func (a *Allocator) Alloc(ctx context.Context, requestedQuota int) (int, error) {
 	grantedQuota, err := a.tryAlloc(ctx, requestedQuota)
@@ -121,20 +107,17 @@ func (a *Allocator) tryAllocLocal(ctx context.Context, quota int) error {
 
 // SetLimit sets the limit of the local limiter.
 // setting new limit will attempt to cancel inflight allocations.
-func (a *Allocator) SetLimit(ctx context.Context, limit int) error {
+func (a *Allocator) SetLimit(limit int) error {
 	if limit > int(a.global.Limit()) {
 		return fmt.Errorf("local limit cannot be higher than global limit")
 	}
 
-	oldLimit := a.localLimit
-	//drain
-	a.local.AllowN(time.Now(), oldLimit)
-	a.setLocalLimit(limit)
+	a.mu.Lock()
+	a.local.SetLimit(rate.Limit(limit))
+	a.local.SetBurst(limit)
+	a.mu.Unlock()
+
 	select {
-	case <-ctx.Done():
-		// ctx cancelled rollback oldLimit limit
-		log.Println("ctx cancelled, rollbacking old limit")
-		a.setLocalLimit(oldLimit)
 	case <-a.localUpdatesCh:
 		// there is a leftover update from the previous limit not consumed by allocator, discard it
 		a.localUpdatesCh <- UpdateQuotaRequest(limit)
@@ -142,14 +125,5 @@ func (a *Allocator) SetLimit(ctx context.Context, limit int) error {
 		a.localUpdatesCh <- UpdateQuotaRequest(limit)
 	}
 
-	log.Println("allocator local: new limit:", a.localLimit)
 	return nil
-}
-
-func (a *Allocator) setLocalLimit(limit int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.localLimit = limit
-	a.local.SetLimit(rate.Limit(limit))
-	a.local.SetBurst(limit)
 }

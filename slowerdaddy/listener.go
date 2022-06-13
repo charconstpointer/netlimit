@@ -1,12 +1,9 @@
 package slowerdaddy
 
 import (
-	"context"
 	"errors"
-	"log"
 	"net"
 	"sync"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
@@ -25,8 +22,8 @@ type Listener struct {
 	net.Listener
 	limiter     *rate.Limiter
 	conns       []*Allocator
-	limitConn   int
-	limitGlobal int
+	localLimit  int
+	globalLimit int
 }
 
 // Listen returns a Listener that will be bound to addr with the specified limits.
@@ -41,8 +38,8 @@ func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) 
 
 	return &Listener{
 		Listener:    ln,
-		limitConn:   limitConn,
-		limitGlobal: limitTotal,
+		localLimit:  limitConn,
+		globalLimit: limitTotal,
 		limiter:     limiter,
 	}, nil
 }
@@ -54,11 +51,8 @@ func (l *Listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 
-	alloc := NewAllocator(l.limiter, l.limitConn)
-	newConn := &Conn{
-		Conn: conn,
-		a:    alloc,
-	}
+	alloc := NewAllocator(l.limiter, l.localLimit)
+	newConn := NewConn(conn, alloc)
 
 	l.mu.Lock()
 	l.conns = append(l.conns, alloc)
@@ -67,24 +61,21 @@ func (l *Listener) Accept() (net.Conn, error) {
 	return newConn, nil
 }
 
-// SetTotalLimit sets the limit of the bandwidth of all net.Conn connections currently active combined.
-func (l *Listener) SetTotalLimit(limit int) error {
-	log.Println("allocator global: new limit:", limit)
+// SetGlobalLimit sets the limit of the bandwidth of all net.Conn connections currently active combined.
+func (l *Listener) SetGlobalLimit(limit int) error {
 	l.mu.Lock()
-	l.limiter.AllowN(time.Now(), l.limitGlobal)
 	l.limiter.SetLimit(rate.Limit(limit))
 	l.limiter.SetBurst(limit)
-	l.limitGlobal = limit
+	l.globalLimit = limit
 	l.mu.Unlock()
 	return nil
 }
 
-func (l *Listener) SetLocalLimit(ctx context.Context, newLocalLimit int) error {
-	log.Println("allocator local: new limit:", newLocalLimit)
-	if newLocalLimit > l.limitGlobal {
+func (l *Listener) SetLocalLimit(newLocalLimit int) error {
+	if newLocalLimit > l.globalLimit {
 		return ErrLimitGreaterThanTotal
 	}
-	eg, ctx := errgroup.WithContext(ctx)
+	eg := errgroup.Group{}
 	eg.SetLimit(len(l.conns))
 
 	l.mu.Lock()
@@ -92,15 +83,15 @@ func (l *Listener) SetLocalLimit(ctx context.Context, newLocalLimit int) error {
 	for _, alloc := range l.conns {
 		alloc := alloc
 		eg.TryGo(func() error {
-			return alloc.SetLimit(ctx, newLocalLimit)
+			return alloc.SetLimit(newLocalLimit)
 		})
 	}
-	err := eg.Wait()
 
+	err := eg.Wait()
 	if err != nil {
-		log.Println("error setting local limit:", err)
 		return err
 	}
-	l.limitConn = newLocalLimit
+
+	l.localLimit = newLocalLimit
 	return nil
 }

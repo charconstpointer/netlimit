@@ -2,9 +2,10 @@ package slowerdaddy_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/charconstpointer/slowerdaddy/slowerdaddy"
 	"golang.org/x/time/rate"
-	"testing"
 )
 
 func TestAllocator_SetLimit(t *testing.T) {
@@ -14,7 +15,6 @@ func TestAllocator_SetLimit(t *testing.T) {
 		globalLimit int
 	}
 	type args struct {
-		ctx   context.Context
 		limit int
 	}
 	tests := []struct {
@@ -31,7 +31,6 @@ func TestAllocator_SetLimit(t *testing.T) {
 				global:      rate.NewLimiter(rate.Limit(10), 10),
 			},
 			args: args{
-				ctx:   context.Background(),
 				limit: 20,
 			},
 			wantErr: true,
@@ -44,7 +43,6 @@ func TestAllocator_SetLimit(t *testing.T) {
 				global:      rate.NewLimiter(rate.Limit(10), 10),
 			},
 			args: args{
-				ctx:   context.Background(),
 				limit: 10,
 			},
 			wantErr: false,
@@ -53,7 +51,7 @@ func TestAllocator_SetLimit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := slowerdaddy.NewAllocator(tt.fields.global, tt.fields.localLimit)
-			if err := a.SetLimit(tt.args.ctx, tt.args.limit); (err != nil) != tt.wantErr {
+			if err := a.SetLimit(tt.args.limit); (err != nil) != tt.wantErr {
 				t.Errorf("SetLimit() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
