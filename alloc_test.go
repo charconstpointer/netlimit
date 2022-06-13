@@ -1,10 +1,10 @@
-package slowerdaddy_test
+package netlimit_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/charconstpointer/slowerdaddy"
+	"github.com/charconstpointer/netlimit"
 	"golang.org/x/time/rate"
 )
 
@@ -50,7 +50,7 @@ func TestAllocator_SetLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := slowerdaddy.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
+			a := netlimit.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
 			if err := a.SetLimit(tt.args.limit); (err != nil) != tt.wantErr {
 				t.Errorf("SetLimit() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -106,7 +106,7 @@ func TestAllocator_Alloc(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := slowerdaddy.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
+			a := netlimit.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
 			got, err := a.Alloc(tt.args.ctx, tt.args.requestedQuota)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Alloc() error = %v, wantErr %v", err, tt.wantErr)
@@ -178,8 +178,8 @@ func TestAllocator_Alloc(t *testing.T) {
 //	for _, tt := range tests {
 //		t.Run(tt.name, func(t *testing.T) {
 //			globalLimiter := rate.NewLimiter(rate.Limit(tt.fields.globalLimit), tt.fields.globalLimit)
-//			first := slowerdaddy.NewAllocator(globalLimiter, tt.fields.localLimit)
-//			second := slowerdaddy.NewAllocator(globalLimiter, tt.fields.localLimit)
+//			first := netlimit.NewAllocator(globalLimiter, tt.fields.localLimit)
+//			second := netlimit.NewAllocator(globalLimiter, tt.fields.localLimit)
 //			ctx := context.Background()
 //			n, err := first.Alloc(ctx, tt.args.requestedQuota)
 //			if err != nil {

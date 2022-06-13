@@ -1,10 +1,10 @@
-package slowerdaddy_test
+package netlimit_test
 
 import (
 	"net"
 	"testing"
 
-	"github.com/charconstpointer/slowerdaddy"
+	"github.com/charconstpointer/netlimit"
 	"golang.org/x/time/rate"
 )
 
@@ -53,9 +53,9 @@ func TestConn_Read(t *testing.T) {
 
 				}
 			}(sender)
-			a := slowerdaddy.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
-			recvConn := slowerdaddy.NewConn(recv, a)
-			senderConn := slowerdaddy.NewConn(sender, a)
+			a := netlimit.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
+			recvConn := netlimit.NewConn(recv, a)
+			senderConn := netlimit.NewConn(sender, a)
 			// send data to receiver
 			go func() {
 				_, err := senderConn.Write(tt.args.msg)
@@ -122,9 +122,9 @@ func TestConn_Write(t *testing.T) {
 
 				}
 			}(sender)
-			a := slowerdaddy.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
-			recvConn := slowerdaddy.NewConn(recv, a)
-			senderConn := slowerdaddy.NewConn(sender, a)
+			a := netlimit.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
+			recvConn := netlimit.NewConn(recv, a)
+			senderConn := netlimit.NewConn(sender, a)
 			// send data to receiver
 			go func() {
 				_, err := senderConn.Write(tt.args.msg)

@@ -1,4 +1,4 @@
-package slowerdaddy
+package netlimit
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-// slowerdaddy is a package that allows to control the bandwidth of the net.Conn connections and the limiter itself.
+// netlimit is a package that allows to control the bandwidth of the net.Conn connections and the limiter itself.
 // Below is a simplified architecture diagram:
 //
 //
@@ -31,4 +31,4 @@
 //       └───┬───────────┘ │
 //           │             │
 //           └─────────────┘
-package slowerdaddy
+package netlimit
