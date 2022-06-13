@@ -4,53 +4,56 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
 
+var _ Allocator = (*DefaultAllocator)(nil)
+
 var (
 	ErrLimitChangedInflight  = errors.New("limit changed while inflight")
 	ErrCouldNotReserveGlobal = errors.New("could not reserve quota in a global limiter")
 )
 
-type Allocator struct {
-	mu             sync.Mutex
-	global         *rate.Limiter
-	local          *rate.Limiter
-	localUpdatesCh chan UpdateQuotaRequest
-	localLimit     int
-	globalLimit    int
+// DefaultAllocator is responsible for controlling requested allocations and ensuring that they not exceed requested limits.
+// DefaultAllocator controls single connection
+type DefaultAllocator struct {
+	mu sync.Mutex
+	// global is the global limiter responsible for maintaining the global bandwidth in the requested range
+	global *rate.Limiter
+
+	// local is the local limiter responsible for maintaining the local bandwidth in the requested range
+	local *rate.Limiter
+
+	// limitUpdates is a channel used to signal that the local limit has changed
+	limitUpdates chan struct{}
 }
 
-type UpdateQuotaRequest int
-
-// NewAllocator creates a new allocator with the given global and local limits.
+// NewDefaultAllocator creates a new allocator with the given global and local limits.
 // Allocator controls requested bandwidth allocations and ensures that they not exceed requested limits.
-func NewAllocator(global *rate.Limiter, limit int) *Allocator {
-	return &Allocator{
-		local:          rate.NewLimiter(rate.Limit(limit), limit),
-		global:         global,
-		localLimit:     limit,
-		localUpdatesCh: make(chan UpdateQuotaRequest, 1),
+func NewDefaultAllocator(global *rate.Limiter, limit int) *DefaultAllocator {
+	return &DefaultAllocator{
+		local:        rate.NewLimiter(rate.Limit(limit), limit),
+		global:       global,
+		limitUpdates: make(chan struct{}, 1),
 	}
 }
 
-// Alloc reserves quota in a global limiter and then blocks until it is allowed
-// to allocate in the local limiter.
-// Once the local limiter allows allocation, Alloc waits for the readiness or the global reservation
-func (a *Allocator) Alloc(ctx context.Context, requestedQuota int) (int, error) {
-	grantedQuota, err := a.tryAlloc(ctx, requestedQuota)
+// Alloc blocks until it is allowed to allocate requested quota.
+func (a *DefaultAllocator) Alloc(ctx context.Context, requestedQuota int) (int, error) {
+	grantedQuota, err := a.TryAlloc(ctx, requestedQuota)
 	for err == ErrLimitChangedInflight {
-		grantedQuota, err = a.tryAlloc(ctx, requestedQuota)
+		grantedQuota, err = a.TryAlloc(ctx, requestedQuota)
 	}
 
 	return grantedQuota, err
 }
 
-func (a *Allocator) tryAlloc(ctx context.Context, quota int) (int, error) {
+// TryAlloc reserves quota in a global limiter and then blocks until it is allowed to allocate the quota in the local limiter.
+// Once the local limiter allows allocation, TryAlloc waits for the readiness or the global reservation
+func (a *DefaultAllocator) TryAlloc(ctx context.Context, quota int) (int, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	grantedQuota, reservation := a.reserveGlobal(quota)
@@ -66,7 +69,7 @@ func (a *Allocator) tryAlloc(ctx context.Context, quota int) (int, error) {
 	}
 
 	select {
-	case <-a.localUpdatesCh:
+	case <-a.limitUpdates:
 		reservation.Cancel()
 		return 0, ErrLimitChangedInflight
 	default:
@@ -76,7 +79,7 @@ func (a *Allocator) tryAlloc(ctx context.Context, quota int) (int, error) {
 	return grantedQuota, nil
 }
 
-func (a *Allocator) reserveGlobal(quota int) (int, *rate.Reservation) {
+func (a *DefaultAllocator) reserveGlobal(quota int) (int, *rate.Reservation) {
 	if quota > int(a.local.Limit()) {
 		quota = int(a.local.Limit())
 	}
@@ -84,7 +87,7 @@ func (a *Allocator) reserveGlobal(quota int) (int, *rate.Reservation) {
 	return quota, a.global.ReserveN(time.Now(), quota)
 }
 
-func (a *Allocator) tryAllocLocal(ctx context.Context, quota int) error {
+func (a *DefaultAllocator) tryAllocLocal(ctx context.Context, quota int) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -103,7 +106,7 @@ func (a *Allocator) tryAllocLocal(ctx context.Context, quota int) error {
 			return fmt.Errorf("could not allocate quota in local limiter")
 		}
 		return nil
-	case <-a.localUpdatesCh:
+	case <-a.limitUpdates:
 		return ErrLimitChangedInflight
 	case <-ctx.Done():
 		return ctx.Err()
@@ -112,35 +115,23 @@ func (a *Allocator) tryAllocLocal(ctx context.Context, quota int) error {
 
 // SetLimit sets the limit of the local limiter.
 // setting new limit will attempt to cancel inflight allocations.
-func (a *Allocator) SetLimit(ctx context.Context, limit int) error {
+func (a *DefaultAllocator) SetLimit(limit int) error {
 	if limit > int(a.global.Limit()) {
 		return fmt.Errorf("local limit cannot be higher than global limit")
 	}
 
-	oldLimit := a.localLimit
-	//drain
-	a.local.AllowN(time.Now(), oldLimit)
-	a.setLocalLimit(limit)
-	select {
-	case <-ctx.Done():
-		// ctx cancelled rollback oldLimit limit
-		log.Println("ctx cancelled, rollbacking old limit")
-		a.setLocalLimit(oldLimit)
-	case <-a.localUpdatesCh:
-		// there is a leftover update from the previous limit not consumed by allocator, discard it
-		a.localUpdatesCh <- UpdateQuotaRequest(limit)
-	default:
-		a.localUpdatesCh <- UpdateQuotaRequest(limit)
-	}
-
-	log.Println("allocator local: new limit:", a.localLimit)
-	return nil
-}
-
-func (a *Allocator) setLocalLimit(limit int) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.localLimit = limit
 	a.local.SetLimit(rate.Limit(limit))
 	a.local.SetBurst(limit)
+	a.mu.Unlock()
+
+	select {
+	case <-a.limitUpdates:
+		// there is a leftover update from the previous limit not consumed by allocator, discard it
+		a.limitUpdates <- struct{}{}
+	default:
+		a.limitUpdates <- struct{}{}
+	}
+
+	return nil
 }

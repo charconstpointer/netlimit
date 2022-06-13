@@ -8,13 +8,18 @@ import (
 
 var _ net.Conn = (*Conn)(nil)
 
+type Allocator interface {
+	Alloc(ctx context.Context, n int) (int, error)
+}
+
 // Conn is a net.Conn that obeys quota limits set by Listener
 type Conn struct {
 	net.Conn
-	a *Allocator
+	a Allocator
 }
 
-func NewConn(conn net.Conn, a *Allocator) *Conn {
+// NewConn returns a new Conn that obeys quota limits set by Listener
+func NewConn(conn net.Conn, a Allocator) *Conn {
 	return &Conn{Conn: conn, a: a}
 }
 

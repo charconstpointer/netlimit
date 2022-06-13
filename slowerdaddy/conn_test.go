@@ -1,10 +1,11 @@
 package slowerdaddy_test
 
 import (
-	"github.com/charconstpointer/slowerdaddy/slowerdaddy"
-	"golang.org/x/time/rate"
 	"net"
 	"testing"
+
+	"github.com/charconstpointer/slowerdaddy/slowerdaddy"
+	"golang.org/x/time/rate"
 )
 
 func TestConn_Read(t *testing.T) {
@@ -52,7 +53,7 @@ func TestConn_Read(t *testing.T) {
 
 				}
 			}(sender)
-			a := slowerdaddy.NewAllocator(tt.fields.global, tt.fields.localLimit)
+			a := slowerdaddy.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
 			recvConn := slowerdaddy.NewConn(recv, a)
 			senderConn := slowerdaddy.NewConn(sender, a)
 			// send data to receiver
@@ -121,7 +122,7 @@ func TestConn_Write(t *testing.T) {
 
 				}
 			}(sender)
-			a := slowerdaddy.NewAllocator(tt.fields.global, tt.fields.localLimit)
+			a := slowerdaddy.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
 			recvConn := slowerdaddy.NewConn(recv, a)
 			senderConn := slowerdaddy.NewConn(sender, a)
 			// send data to receiver
