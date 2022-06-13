@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/charconstpointer/slowerdaddy/slowerdaddy"
+	"github.com/charconstpointer/slowerdaddy"
 	"golang.org/x/time/rate"
 )
 
