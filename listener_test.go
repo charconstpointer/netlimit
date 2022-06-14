@@ -13,27 +13,18 @@ func TestSetLocalLimit(t *testing.T) {
 	if err != nil {
 		t.Errorf("Listen() error = %v", err)
 	}
-	done := make(chan struct{}, 1)
 	go func() {
-		for {
-			select {
-			case <-done:
-				ln.Close()
-				t.Logf("Listener closed")
-				return
-			default:
-			}
-			c, err := ln.Accept()
+		defer ln.Close()
+		c, err := ln.Accept()
+		if err != nil {
+			t.Errorf("Accept() error = %v", err)
+			return
+		}
+		for _, limit := range limits {
+			b := make([]byte, limit)
+			_, err := c.Read(b)
 			if err != nil {
-				t.Errorf("Accept() error = %v", err)
-				return
-			}
-			for _, limit := range limits {
-				b := make([]byte, limit)
-				_, err := c.Read(b)
-				if err != nil {
-					t.Errorf("Read() error = %v", err)
-				}
+				t.Errorf("Read() error = %v", err)
 			}
 		}
 	}()
@@ -53,10 +44,5 @@ func TestSetLocalLimit(t *testing.T) {
 		if n != limit {
 			t.Errorf("Write() = %v, want %v", n, limit)
 		}
-	}
-	select {
-	case done <- struct{}{}:
-	default:
-		t.Fatalf("cannot clean up test")
 	}
 }
