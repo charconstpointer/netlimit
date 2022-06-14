@@ -3,6 +3,7 @@ package netlimit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -136,6 +137,17 @@ func (l *Listener) SetLocalLimit(newLocalLimit int) error {
 	return nil
 }
 
+func (l *Listener) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, conn := range l.conns {
+		if err := conn.Close(); err != nil {
+			return fmt.Errorf("failed to close listener: %w", err)
+		}
+	}
+	return l.Listener.Close()
+}
+
 func (l *Listener) gc() {
 	for {
 		l.mu.Lock()
@@ -160,5 +172,3 @@ func remove(slice []*Conn, elem *Conn) []*Conn {
 	}
 	return slice
 }
-
-// TODO: implement Close()
