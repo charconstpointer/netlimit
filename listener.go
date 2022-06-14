@@ -60,6 +60,10 @@ func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) 
 // and because functions like internetSocket take a context argument
 // even though it won't be used for the particular case of Listen
 func ListenCtx(ctx context.Context, network, addr string, limitTotal, limitConn int) (*Listener, error) {
+	if limitTotal < limitConn {
+		return nil, ErrLimitGreaterThanTotal
+	}
+
 	cfg := net.ListenConfig{}
 	ln, err := cfg.Listen(ctx, network, addr)
 	if err != nil {
