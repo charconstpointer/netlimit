@@ -9,7 +9,7 @@ import (
 
 func TestSetLocalLimit(t *testing.T) {
 	limits := []int{1, 5, 7}
-	ln, err := netlimit.Listen("tcp", ":8080", 10, 1)
+	ln, err := netlimit.Listen("tcp", ":", 10, 1)
 	if err != nil {
 		t.Errorf("Listen() error = %v", err)
 	}
@@ -31,7 +31,7 @@ func TestSetLocalLimit(t *testing.T) {
 			}
 		}
 	}()
-	conn, err := net.Dial("tcp", ":8080")
+	conn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Errorf("Dial() error = %v", err)
 	}
@@ -52,7 +52,7 @@ func TestSetLocalLimit(t *testing.T) {
 
 func TestSetGlobalLimit(t *testing.T) {
 	limits := []int{20, 40, 60}
-	ln, err := netlimit.Listen("tcp", ":8080", 10, 10)
+	ln, err := netlimit.Listen("tcp", ":0", 10, 10)
 	if err != nil {
 		t.Errorf("Listen() error = %v", err)
 	}
@@ -74,7 +74,7 @@ func TestSetGlobalLimit(t *testing.T) {
 			}
 		}
 	}()
-	conn, err := net.Dial("tcp", ":8080")
+	conn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Errorf("Dial() error = %v", err)
 	}
