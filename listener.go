@@ -1,6 +1,7 @@
 package netlimit
 
 import (
+	"context"
 	"errors"
 	"net"
 	"sync"
@@ -29,7 +30,7 @@ type Listener struct {
 	// conns is a list of currently "active" Conn connections.
 	// conns are updated just after accepting a new Conn connection.
 	// There is a gc like goroutine started just after Listener is init'd
-	// to cleanup dangling Conn connections, the default time.Duration interval for 
+	// to cleanup dangling Conn connections, the default time.Duration interval for
 	// this process is time.Second, of course we could make it configurable.
 	conns []*Conn
 
@@ -48,9 +49,19 @@ type Listener struct {
 // Listen returns a *Listener that will be bound to addr with the specified limits.
 // Listen starts gc like process in separate goroutine that attempts to clean up
 // dangling Conn connections
-// TODO: support context.Context
+// net.ListenConfig.Listen is
 func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) {
-	ln, err := net.Listen(network, addr)
+	return ListenCtx(context.Background(), network, addr, limitTotal, limitConn)
+}
+
+// ListenCtx does the same as Listen but also takes a context.Context.
+// The context argument is not used for anything after Listen returns.
+// It's there to permit an early return for a DNS lookup,
+// and because functions like internetSocket take a context argument
+// even though it won't be used for the particular case of Listen
+func ListenCtx(ctx context.Context, network, addr string, limitTotal, limitConn int) (*Listener, error) {
+	cfg := net.ListenConfig{}
+	ln, err := cfg.Listen(ctx, network, addr)
 	if err != nil {
 		return nil, err
 	}
