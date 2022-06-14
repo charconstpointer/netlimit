@@ -56,8 +56,8 @@ func TestConn_Read(t *testing.T) {
 				}
 			}(sender)
 			a := netlimit.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
-			recvConn := netlimit.NewConn(recv, a)
-			senderConn := netlimit.NewConn(sender, a)
+			recvConn, _ := netlimit.NewConn(recv, a)
+			senderConn, _ := netlimit.NewConn(sender, a)
 			// send data to receiver
 			go func() {
 				_, err := senderConn.Write(tt.args.msg)
@@ -127,8 +127,8 @@ func TestConn_Write(t *testing.T) {
 				}
 			}(sender)
 			a := netlimit.NewDefaultAllocator(tt.fields.global, tt.fields.localLimit)
-			recvConn := netlimit.NewConn(recv, a)
-			senderConn := netlimit.NewConn(sender, a)
+			recvConn, _ := netlimit.NewConn(recv, a)
+			senderConn, _ := netlimit.NewConn(sender, a)
 			// send data to receiver
 			go func() {
 				_, err := senderConn.Write(tt.args.msg)
@@ -171,8 +171,8 @@ func TestNetConn(t *testing.T) {
 	nettest.TestConn(t, func() (c1 net.Conn, c2 net.Conn, stop func(), err error) {
 		conn1, conn2 := net.Pipe()
 		a := netlimit.NewDefaultAllocator(rate.NewLimiter(rate.Inf, 1024<<8), 1024<<8)
-		c1 = netlimit.NewConn(conn1, a)
-		c2 = netlimit.NewConn(conn2, a)
+		c1, _ = netlimit.NewConn(conn1, a)
+		c2, _ = netlimit.NewConn(conn2, a)
 		return c1, c2, func() {
 			conn1.Close()
 			conn2.Close()
