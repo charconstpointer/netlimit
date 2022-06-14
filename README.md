@@ -24,6 +24,20 @@ Use it as you would any other `net.Listener` e.g
 http.Serve(ln, handler)
 ```
 
+You can tweak limits during runtime
+
+Change local(per connection) limit use
+
+```
+err := ln.SetLocalLimit(newLocalLimit)
+```
+
+Change global(server) limit use
+
+```
+err := ln.SetGlobalLimit(newLocalLimit int)
+```
+
 ---
 # Resources
 https://pkg.go.dev/github.com/charconstpointer/netlimit
