@@ -35,7 +35,7 @@ err := ln.SetLocalLimit(newLocalLimit)
 Change global(server) limit use
 
 ```
-err := ln.SetGlobalLimit(newLocalLimit int)
+err := ln.SetGlobalLimit(newLocalLimit)
 ```
 
 ---
