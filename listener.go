@@ -93,7 +93,10 @@ func (l *Listener) Accept() (net.Conn, error) {
 	}
 
 	alloc := NewDefaultAllocator(l.limiter, l.localLimit)
-	newConn := NewConn(conn, alloc)
+	newConn, err := NewConn(conn, alloc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new conn: %w", err)
+	}
 
 	l.mu.Lock()
 	l.conns = append(l.conns, newConn)

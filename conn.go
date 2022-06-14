@@ -25,16 +25,15 @@ type Conn struct {
 }
 
 // NewConn returns a new Conn
-func NewConn(conn net.Conn, a Allocator) *Conn {
-	// TODO: handle nil a
+func NewConn(conn net.Conn, a Allocator) (*Conn, error) {
 	if a == nil {
-		
+		return nil, fmt.Errorf("allocator cannot be nil")
 	}
 	return &Conn{
 		Conn: conn,
 		a:    a,
 		done: make(chan struct{}, 1),
-	}
+	}, nil
 }
 
 // Read reads data from the connection.
