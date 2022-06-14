@@ -13,19 +13,23 @@ type Allocator interface {
 	SetLimit(limit int) error
 }
 
-// Conn is a net.Conn that obeys quota limits set by Listener
+// Conn is a net.Conn that obeys quota limits managed by Allocator
 type Conn struct {
 	net.Conn
 
-	// a is the allocator that controls the quota for this connection
+	// a is the allocator that controls the quota requests and bandwidth allocations for this connection
 	a Allocator
 
 	// done is a channel used to signal that the connection is closed and ready to be gc'd
 	done chan struct{}
 }
 
-// NewConn returns a new Conn that obeys quota limits set by Listener
+// NewConn returns a new Conn
 func NewConn(conn net.Conn, a Allocator) *Conn {
+	// TODO: handle nil a
+	if a == nil {
+		
+	}
 	return &Conn{
 		Conn: conn,
 		a:    a,

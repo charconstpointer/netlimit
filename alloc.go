@@ -18,7 +18,7 @@ var (
 )
 
 // DefaultAllocator is responsible for controlling requested allocations and ensuring that they not exceed requested limits.
-// DefaultAllocator controls single connection
+// DefaultAllocator controls a single connection
 type DefaultAllocator struct {
 	mu sync.Mutex
 	// global is the global limiter responsible for maintaining the global bandwidth in the requested range

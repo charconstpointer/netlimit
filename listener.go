@@ -17,7 +17,7 @@ var (
 
 var _ net.Listener = (*Listener)(nil)
 
-// Listener is a net.Listener that allows to control the bandwidth of the net.Conn connections and the limiter itself.
+// Listener is a net.Listener that allows to control the bandwidth of the net.Conn connections it accepts.
 type Listener struct {
 	mu sync.Mutex
 	net.Listener
@@ -26,23 +26,29 @@ type Listener struct {
 	// all connections combined cannot exceed limits enforced by this limiter.
 	limiter *rate.Limiter
 
-	// conns is the list of currently "active" Conn connections.
-	// conns are created when a new connection is accepted
+	// conns is a list of currently "active" Conn connections.
+	// conns are updated just after accepting a new Conn connection.
+	// There is a gc like goroutine started just after Listener is init'd
+	// to cleanup dangling Conn connections, the default time.Duration interval for 
+	// this process is time.Second, of course we could make it configurable.
 	conns []*Conn
 
-	// localLimit is the limit of the bandwidth allowed for a single net.Conn connection per second
+	// localLimit determines maximum bytes per second limit of bandwidth allowed per single active Conn connection
+	// localLimit cannot be greater than globalLimit
 	localLimit int
 
-	// globalLimit is the limit of the bandwidth allowed for all net.Conn connections combined per second
-	// cannot be lower than localLimit
+	// globalLimit determines maximum bytes per second limit of bandwidth allowed for all active Conn connections combined
+	// globalLimit cannot be lower than localLimit
 	globalLimit int
 
-	// gcInterval
+	// gcInterval is the interval between "gc" cycles
 	gcInterval time.Duration
 }
 
-// Listen returns a Listener that will be bound to addr with the specified limits.
-// Listen uses WithLimit to create the Listener.
+// Listen returns a *Listener that will be bound to addr with the specified limits.
+// Listen starts gc like process in separate goroutine that attempts to clean up
+// dangling Conn connections
+// TODO: support context.Context
 func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) {
 	ln, err := net.Listen(network, addr)
 	if err != nil {
@@ -139,3 +145,5 @@ func remove(slice []*Conn, elem *Conn) []*Conn {
 	}
 	return slice
 }
+
+// TODO: implement Close()
