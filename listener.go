@@ -50,9 +50,10 @@ type Listener struct {
 // Listen returns a *Listener that will be bound to addr with the specified limits.
 // Listen starts gc like process in separate goroutine that attempts to clean up
 // dangling Conn connections
-// net.ListenConfig.Listen is
-func Listen(network, addr string, limitTotal, limitConn int) (*Listener, error) {
-	return ListenCtx(context.Background(), network, addr, limitTotal, limitConn)
+// limitGlobal is the maximum bytes per second allowed for all net.Conn connections combined
+// limitLocal is the maximum bytes per second allowed for a single net.Conn connection
+func Listen(network, addr string, limitGlobal, limitLocal int) (*Listener, error) {
+	return ListenCtx(context.Background(), network, addr, limitGlobal, limitLocal)
 }
 
 // ListenCtx does the same as Listen but also takes a context.Context.
