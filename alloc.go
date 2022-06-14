@@ -44,6 +44,7 @@ func NewDefaultAllocator(global *rate.Limiter, limit int) *DefaultAllocator {
 // Alloc blocks until it is allowed to allocate requested quota.
 func (a *DefaultAllocator) Alloc(ctx context.Context, requestedQuota int) (int, error) {
 	grantedQuota, err := a.TryAlloc(ctx, requestedQuota)
+	// this looks like a busy loop, but it's not, most of the time it waits on WaitN or on a time.Timer.C channel
 	for err == ErrLimitChangedInflight {
 		grantedQuota, err = a.TryAlloc(ctx, requestedQuota)
 	}
