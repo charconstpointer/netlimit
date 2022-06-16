@@ -64,6 +64,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	written := 0
 	total := len(b)
 	for written < total {
+		// TODO: perhaps we could use io.CopyN here
 		tail := written + granted
 		if tail > total {
 			tail = total
